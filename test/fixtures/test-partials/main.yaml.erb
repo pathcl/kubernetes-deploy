@@ -1,0 +1,13 @@
+<% %w(one two three).each do |num| %>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm-<%= num %>
+  labels:
+    name: cm-<%= num %>
+data:
+  <%= partial 'restart-policy' %>
+<% end %>
+
+<%= partial "pod", name: "pod2", args: ["echo", "bar"] %>

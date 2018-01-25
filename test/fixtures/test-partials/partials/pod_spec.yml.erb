@@ -1,0 +1,7 @@
+containers:
+- name: sleepy-guy
+  image: busybox
+  imagePullPolicy: IfNotPresent
+  command: ["sleep", "8000"]
+env:
+  <%= partial 'env' %>

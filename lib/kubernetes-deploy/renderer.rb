@@ -18,6 +18,30 @@ module KubernetesDeploy
       @id = current_sha[0...8] + "-#{SecureRandom.hex(4)}" if current_sha
     end
 
+    def render_partial(partial, locals)
+      variables = template_variables.merge("locals" => locals).merge(locals)
+      path = find_partial(partial)
+      src = render_template(File.basename(path), File.read(path), variables)
+      # Make sure indentation isn't a problem, by producing a single line of
+      # parseable YAML. Note that JSON is a subset of YAML.
+      JSON.generate(YAML.load(src))
+    rescue Psych::SyntaxError => e
+      binding.pry
+    end
+
+    def render_template(filename, raw_template, variables = template_variables)
+      return raw_template unless File.extname(filename) == ".erb"
+
+      erb_binding = TemplateContext.new(self).template_binding
+      bind_template_variables(erb_binding, variables)
+      ERB.new(raw_template).result(erb_binding)
+    rescue NameError => e
+      @logger.summary.add_paragraph("Error from renderer:\n  #{e.message.tr("\n", ' ')}")
+      raise FatalDeploymentError, "Template '#{filename}' cannot be rendered"
+    end
+
+    private
+
     def template_variables
       {
         'current_sha' => @current_sha,
@@ -36,49 +60,22 @@ module KubernetesDeploy
       @partials_dirs.each do |dir|
         partial_names.each do |partial_name|
           partial_path = File.join(dir, partial_name)
-          return File.read(partial_path) if File.exist?(partial_path)
+          return partial_path if File.exist?(partial_path)
         end
       end
       raise FatalDeploymentError, "Could not find partial '#{name}' in any of #{@partials_dirs.join(':')}"
     end
 
-    def render_template(filename, raw_template)
-      return raw_template unless File.extname(filename) == ".erb"
-
-      binding = TemplateContext.new(self).template_binding
-      bind_template_variables(binding, template_variables)
-
-      src = ERB.new(raw_template).result(binding)
-      if src =~ /^--- *\n/m
-        src
-      else
-        # Make sure indentation isn't a problem, by producing a single line of
-        # parseable YAML. Note that JSON is a subset of YAML.
-        JSON.generate(YAML.load(src))
-      end
-    rescue StandardError => e
-      @logger.summary.add_paragraph("Error from renderer:\n  #{e.message.tr("\n", ' ')}")
-      raise FatalDeploymentError, "Template '#{filename}' cannot be rendered"
-    end
-
     class TemplateContext
+      attr_reader :template_binding
+
       def initialize(renderer)
         @_renderer = renderer
-      end
-
-      def template_binding
-        binding
+        @template_binding = binding
       end
 
       def partial(partial, locals = {})
-        binding = template_binding
-        binding.local_variable_set("locals", locals)
-
-        variables = @_renderer.template_variables.merge(locals)
-        @_renderer.bind_template_variables(binding, variables)
-
-        template = @_renderer.find_partial(partial)
-        ERB.new(template).result(binding)
+        @_renderer.render_partial(partial, locals)
       end
     end
   end
