@@ -18,19 +18,40 @@ module KubernetesDeploy
       @id = current_sha[0...8] + "-#{SecureRandom.hex(4)}" if current_sha
     end
 
-    def render_template(filename, raw_template)
+    def render_template(filename, raw_template, extra_variables = {})
       return raw_template unless File.extname(filename) == ".erb"
 
       erb_binding = TemplateContext.new(self).template_binding
-      bind_template_variables(erb_binding, template_variables)
+      bind_template_variables(erb_binding, template_variables.merge(extra_variables))
 
-      ERB.new(raw_template).result(erb_binding)
-    rescue StandardError => e
-      @logger.summary.add_paragraph("Error from renderer:\n  #{e.message.tr("\n", ' ')}")
-      raise FatalDeploymentError, "Template '#{filename}' cannot be rendered"
+      ERB.new(raw_template, nil, '-').result(erb_binding)
+    rescue NameError, Psych::SyntaxError => e
+      report_template_invalid!(e, filename, raw_template)
+    end
+
+    def render_partial(partial, locals)
+      template_file = find_partial(partial)
+      content = File.read(template_file)
+      variables = { locals: locals }.merge(locals)
+      expanded_template = render_template(template_file, content, variables)
+
+      docs = YAML.load_stream(expanded_template)
+      return JSON.generate(docs.first) if docs.one?
+
+      docs.map do |doc|
+        "\n---\n" + JSON.generate(doc)
+      end.join
+    rescue NameError, Psych::SyntaxError => e
+      report_template_invalid!(e, template_file, expanded_template)
     end
 
     private
+
+    def report_template_invalid!(err, filename, content)
+      @logger.summary.add_paragraph("Error from renderer:\n  #{err.message.tr("\n", ' ')}")
+      @logger.summary.add_paragraph("Rendered template content:\n#{content}")
+      raise FatalDeploymentError, "Template '#{filename}' cannot be rendered"
+    end
 
     def template_variables
       {
@@ -50,7 +71,7 @@ module KubernetesDeploy
       @partials_dirs.each do |dir|
         partial_names.each do |partial_name|
           partial_path = File.join(dir, partial_name)
-          return File.read(partial_path) if File.exist?(partial_path)
+          return partial_path if File.exist?(partial_path)
         end
       end
       raise FatalDeploymentError, "Could not find partial '#{name}' in any of #{@partials_dirs.join(':')}"
@@ -66,27 +87,7 @@ module KubernetesDeploy
       end
 
       def partial(partial, locals = {})
-        erb_binding = template_binding
-        erb_binding.local_variable_set("locals", locals)
-
-        variables = @_renderer.__send__(:template_variables).merge(locals)
-        @_renderer.__send__(:bind_template_variables, erb_binding, variables)
-
-        template = @_renderer.__send__(:find_partial, partial)
-        expanded_template = ERB.new(template, nil, '-').result(erb_binding)
-
-        # If we're at top level we don't need to worry about the result being
-        # included in another partial.
-        return expanded_template if expanded_template =~ /^--- *\n/m
-
-        # If we're not at the top level, we make sure indentation isn't a
-        # problem, by producing a single line of parseable YAML. Note that JSON
-        # is a subset of YAML.
-        begin
-          JSON.generate(YAML.load(expanded_template))
-        rescue Psych::SyntaxError => e
-          raise "#{e.class}#{e}. Partial did not expand to valid YAML, source: #{expanded_template}"
-        end
+        @_renderer.render_partial(partial, locals)
       end
     end
   end
