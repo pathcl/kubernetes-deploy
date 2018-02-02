@@ -36,11 +36,13 @@ module KubernetesDeploy
       expanded_template = render_template(template_file, content, variables)
 
       docs = YAML.load_stream(expanded_template)
-      return JSON.generate(docs.first) if docs.one?
-
-      docs.map do |doc|
-        "\n---\n" + JSON.generate(doc)
-      end.join
+      if docs.length > 1
+        # indenting multiple documents would not be valid yaml, so we can return this partial as-is
+        return expanded_template
+      end
+      # Make sure indentation isn't a problem, by producing a single line of parseable YAML.
+      # Note that JSON is a subset of YAML.
+      JSON.generate(docs.first)
     rescue NameError, Psych::SyntaxError => e
       report_template_invalid!(e, template_file, expanded_template)
     end

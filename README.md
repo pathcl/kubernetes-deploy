@@ -163,7 +163,23 @@ Both `.yaml.erb` and `.yml.erb` file extensions are supported. Templates must re
 
 ##### Limitations when using partials
 
-Partials can be included almost everywhere in ERB templates, with one notable exception: you cannot use a partial to define a subset of fields. For example, given a partial `p` defining two fields 'a' and 'b',
+1. If your partial contains a single full YAML document, you must place any document separator required in the _parent_ template. For example, given a partial `pod` containing a complete pod spec, you can create two pods like this:
+
+```yaml
+---
+<%= partial "pod", name: "pod1" %>
+---
+<%= partial "pod", name: "pod2" %>
+```
+
+but not like this (even if the `pod` partial starts with a document separator--it will be stripped):
+
+```yaml
+<%= partial "pod", name: "pod1" %>
+<%= partial "pod", name: "pod2" %>
+```
+
+2. Partials can be included almost everywhere in ERB templates, with one notable exception: you cannot use a partial to define a subset of fields. For example, given a partial `p` defining two fields 'a' and 'b',
 
 ```yaml
 a: 1
