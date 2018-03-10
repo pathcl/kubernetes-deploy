@@ -24,6 +24,7 @@ module KubernetesDeploy
       @context = context
       @namespace = namespace
       @logger = logger
+      @sync_mediator = SyncMediator.new(namespace: @namespace, context: @context, logger: @logger)
     end
 
     def perform(deployments_names = nil)
@@ -41,7 +42,8 @@ module KubernetesDeploy
 
       @logger.phase_heading("Waiting for rollout")
       resources = build_watchables(deployments, start)
-      ResourceWatcher.new(resources, logger: @logger, operation_name: "restart").run
+      ResourceWatcher.new(resources: resources, sync_mediator: @sync_mediator,
+        logger: @logger, operation_name: "restart").run
       success = resources.all?(&:deploy_succeeded?)
     rescue FatalDeploymentError => error
       @logger.summary.add_action(error.message)
