@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 module KubernetesDeploy
   class ResourceWatcher
-    def initialize(resources, logger:, deploy_started_at: Time.now.utc, operation_name: "deploy")
+    def initialize(resources, logger:, deploy_started_at: Time.now.utc, operation_name: "deploy", timeout: nil)
       unless resources.is_a?(Enumerable)
         raise ArgumentError, <<~MSG
           ResourceWatcher expects Enumerable collection, got `#{resources.class}` instead
@@ -11,13 +11,18 @@ module KubernetesDeploy
       @logger = logger
       @deploy_started_at = deploy_started_at
       @operation_name = operation_name
+      @timeout = timeout
     end
 
     def run(delay_sync: 3.seconds, reminder_interval: 30.seconds, record_summary: true)
-      delay_sync_until = last_message_logged_at = Time.now.utc
+      delay_sync_until = last_message_logged_at = monitoring_started = Time.now.utc
       remainder = @resources.dup
 
       while remainder.present?
+        if @timeout && (Time.now.utc - monitoring_started > @timeout)
+          report_giving_up(remainder)
+          break
+        end
         if Time.now.utc < delay_sync_until
           sleep(delay_sync_until - Time.now.utc)
         end
@@ -65,6 +70,12 @@ module KubernetesDeploy
       return unless resources.present?
       resource_list = resources.map(&:id).join(', ')
       msg = reminder ? "Still waiting for: #{resource_list}" : "Continuing to wait for: #{resource_list}"
+      @logger.info(msg)
+    end
+
+    def report_giving_up(resources)
+      resource_list = resources.map(&:id).join(', ')
+      msg = "Gave up on waiting for: #{resource_list} after #{@timeout.inspect}"
       @logger.info(msg)
     end
 

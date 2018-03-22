@@ -99,12 +99,10 @@ class ResourceWatcherTest < KubernetesDeploy::TestCase
 
   def test_timeout_from_waiting
     resource = ForeverTakingResource.new("web-pod", 1, nil)
-    watcher = KubernetesDeploy::ResourceWatcher.new([resource])
+    watcher = KubernetesDeploy::ResourceWatcher.new([resource], logger: logger, timeout: 10.seconds)
     watcher.run(delay_sync: 0.1)
 
-    assert_logs_match(/Waiting for web-pod with 1s timeout/)
-    assert_logs_match(/web-pod failed to deploy with status 'timeout'/)
-    assert_logs_match(/Spent (\S+)s waiting for web-pod/)
+    assert_logs_match(/Gave up on waiting for: web-pod after 10 seconds/)
   end
 
   private
@@ -156,9 +154,8 @@ class ResourceWatcherTest < KubernetesDeploy::TestCase
   end
 
   ForeverTakingResource = Struct.new(:id, :timeout, :status) do
-    def sync;end
-    def deploy_finished?; false; end
-    def deploy_failed?; false; end
-    def deploy_timed_out?; false; end
+    def method_missing(_)
+      false
+    end
   end
 end

@@ -20,10 +20,11 @@ module KubernetesDeploy
     HTTP_OK_RANGE = 200..299
     ANNOTATION = "shipit.shopify.io/restart"
 
-    def initialize(context:, namespace:, logger:)
+    def initialize(context:, namespace:, logger:, timeout: nil)
       @context = context
       @namespace = namespace
       @logger = logger
+      @timeout = timeout
     end
 
     def perform(deployments_names = nil)
@@ -41,7 +42,7 @@ module KubernetesDeploy
 
       @logger.phase_heading("Waiting for rollout")
       resources = build_watchables(deployments, start)
-      ResourceWatcher.new(resources, logger: @logger, operation_name: "restart").run
+      ResourceWatcher.new(resources, logger: @logger, operation_name: "restart", timeout: @timeout).run
       success = resources.all?(&:deploy_succeeded?)
     rescue FatalDeploymentError => error
       @logger.summary.add_action(error.message)
