@@ -99,7 +99,7 @@ class ResourceWatcherTest < KubernetesDeploy::TestCase
 
   def test_timeout_from_waiting
     resource = ForeverTakingResource.new("web-pod", 1, nil)
-    watcher = KubernetesDeploy::ResourceWatcher.new([resource], logger: logger, timeout: 10.seconds)
+    watcher = KubernetesDeploy::ResourceWatcher.new([resource], logger: logger, timeout: 10)
     watcher.run(delay_sync: 0.1)
 
     assert_logs_match(/Gave up on waiting for: web-pod after 10 seconds/)

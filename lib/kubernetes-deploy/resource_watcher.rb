@@ -75,7 +75,7 @@ module KubernetesDeploy
 
     def report_giving_up(resources)
       resource_list = resources.map(&:id).join(', ')
-      msg = "Gave up on waiting for: #{resource_list} after #{@timeout.inspect}"
+      msg = "Gave up on waiting for: #{resource_list} after #{@timeout} seconds"
       @logger.info(msg)
     end
 

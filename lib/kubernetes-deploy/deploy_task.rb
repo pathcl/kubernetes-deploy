@@ -91,14 +91,14 @@ module KubernetesDeploy
     NOT_FOUND_ERROR = 'NotFound'
 
     def initialize(namespace:, context:, current_sha:, template_dir:, logger:, kubectl_instance: nil, bindings: {},
-      timeout: nil)
+      max_watch_seconds: nil)
       @namespace = namespace
       @context = context
       @current_sha = current_sha
       @template_dir = File.expand_path(template_dir)
       @logger = logger
       @kubectl = kubectl_instance
-      @timeout = timeout
+      @max_watch_seconds = max_watch_seconds
       @renderer = KubernetesDeploy::Renderer.new(
         current_sha: @current_sha,
         template_dir: @template_dir,
@@ -362,7 +362,7 @@ module KubernetesDeploy
 
       if verify
         watcher = ResourceWatcher.new(resources, logger: @logger, deploy_started_at: deploy_started_at,
-           timeout: @timeout)
+           timeout: @max_watch_seconds)
         watcher.run(record_summary: record_summary)
       end
     end
